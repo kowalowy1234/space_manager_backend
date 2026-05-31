@@ -4,11 +4,224 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "./src/generated/prisma"
+  provider     = "prisma-client"
+  output       = "./src/generated/prisma"
   moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Organization {
+  id   String @id @default(uuid())
+  name String @unique
+  softConflictsAllowed Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Date
+
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId String?
+
+  organizationMembers   OrganizationMember[]
+  organizationBuildings Building[]
+  organizationRoles     OrganizationRole[]
+  roomTypes             RoomType[]
+  roomProperties        RoomProperty[]
+  equipmentCategories   EquipmentCategory[]
+}
+
+enum SystemRole {
+  ADMIN
+  PLANNER
+  VIEWER
+  INVENTORY_MANAGER
+}
+
+model OrganizationRole {
+  id String @id @default(uuid())
+
+  name String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  organizationRoles OrganizationMemberRoles[]
+
+  @@unique([name, organizationId])
+}
+
+model OrganizationMemberRoles {
+  organizationMember   OrganizationMember @relation(fields: [organizationMemberId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationMemberId String
+
+  organizationRole   OrganizationRole @relation(fields: [organizationRoleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationRoleId String
+
+  @@id([organizationMemberId, organizationRoleId])
+}
+
+model OrganizationMember {
+  id          String       @id @default(uuid())
+  systemRoles SystemRole[] @default([VIEWER])
+
+  organizationRoles OrganizationMemberRoles[]
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organizationId String
+
+  roomDaysLocked BuildingDayLock[]
+
+  @@unique([userId, organizationId])
+}
+
+model User {
+  id                      String               @id @default(uuid())
+  email                   String               @unique()
+  googleId                String?              @unique()
+  name                    String
+  surname                 String
+  passwordHash            String? // optional for google accounts
+  phoneNumber             String?
+  ownedOrganizations      Organization[]
+  organizationMemberships OrganizationMember[]
+}
+
+
+model BuildingDayLock {
+  id String @id @default(uuid())
+
+  date DateTime @db.Date
+  reason String
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  buildingId String
+
+  lockedBy OrganizationMember? @relation(fields: [lockedById], references: [id], onDelete: SetNull)
+  lockedById String?
+
+  lockedAt DateTime @default(now()) @db.Date
+}
+
+model Building {
+  id String @id @default(uuid())
+
+  name      String
+  shorthand String @db.VarChar(10)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  floors Floor[]
+  dayLocks BuildingDayLock[]
+
+  @@unique([name, organizationId])
+  @@unique([shorthand, organizationId])
+}
+
+model Floor {
+  id String @id @default(uuid())
+
+  name      String
+  shorthand String @db.VarChar(10)
+
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  buildingId String
+
+  rooms Room[]
+
+  @@unique([name, buildingId])
+  @@unique([shorthand, buildingId])
+}
+
+model RoomType {
+  id String @id @default(uuid())
+
+  name String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  rooms Room[]
+
+  @@unique([name, organizationId])
+}
+
+model RoomsRoomProperties {
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  roomId String
+
+  roomProperty   RoomProperty @relation(fields: [roomPropertyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  roomPropertyId String
+
+  @@id([roomId, roomPropertyId])
+}
+
+model RoomProperty {
+  id String @id @default(uuid())
+
+  name String
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+
+  roomProperties RoomsRoomProperties[]
+
+  @@unique([name, organizationId])
+}
+
+model Room {
+  id String @id @default(uuid())
+
+  name      String
+  shorthand String @db.VarChar(10)
+  capacity  Int?
+
+  floor   Floor  @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  floorId String
+
+  roomType   RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
+  roomTypeId String?
+
+  properties RoomsRoomProperties[]
+
+  @@unique([name, floorId])
+  @@unique([shorthand, floorId])
+}
+
+model EquipmentCategory {
+  id             String       @id @default(uuid())
+  name           String       
+  organizationId String
+  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  types          EquipmentType[]
+}
+
+model EquipmentType {
+  id             String            @id @default(uuid())
+  name           String            // np. "Kardiomonitor"
+  categoryId     String
+  
+  category       EquipmentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  items          EquipmentItem[]
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  MAINTENANCE
+  RETIRED
+}
+
+model EquipmentItem {
+  id             String          @id @default(uuid())
+  name           String          
+  serialNumber   String?
+  inventoryNumber String?
+  status         EquipmentStatus @default(AVAILABLE)
+  typeId         String
+  
+  type           EquipmentType   @relation(fields: [typeId], references: [id], onDelete: Cascade)
 }
