@@ -1,5 +1,6 @@
-import { Controller, Post } from '@nestjs/common';
+import { Controller, Post, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
@@ -8,8 +9,13 @@ export class AuthController {
   @Post('sign-in/google')
   signInWithGoogle() {}
 
+  @UseGuards(AuthGuard('local'))
   @Post('sign-in')
-  signIn() {}
+  signIn(
+    @Request() req
+  ) {
+    return req.user;
+  }
   
   @Post('sign-up')
   signUp() {}
