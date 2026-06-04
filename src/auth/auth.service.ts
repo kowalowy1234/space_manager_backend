@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../shared/modules/prisma/prisma.service';
 import * as bcrypt from "bcryptjs";
 import { SignUpDto } from './dto/sign-up.dto';
+import { User } from '@prisma/client';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
@@ -9,6 +11,7 @@ export class AuthService {
 
     constructor(
         private readonly prisma: PrismaService,
+        private readonly jwtService: JwtService,
     ) {}
 
     async validateUser(email: string, password: string) {
@@ -24,6 +27,29 @@ export class AuthService {
 
         const { passwordHash, ...userWithNoPassword} = user;
         return userWithNoPassword;
+    }
+
+    signIn(user: User) {
+        const payload = { email: user.email, sub: user.id };
+
+        return {
+            access_token: this.jwtService.sign(payload),
+            refresh_token: this.jwtService.sign(payload, {
+                expiresIn: '7d'
+            })
+        }
+    }
+
+    async refreshToken(refreshToken: string) {
+        const payload = await this.jwtService.verifyAsync(refreshToken);
+
+        if (payload.email && payload.sub) {
+            return {
+                access_token: this.jwtService.sign({ email: payload.email, sub: payload.sub })
+            };
+        }
+
+        throw new UnauthorizedException('Refresh token is either invalid or expired');
     }
 
     async registerNewUser(data: SignUpDto) {
