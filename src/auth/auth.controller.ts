@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Request, Body } from '@nestjs/common';
+import { Controller, Post, UseGuards, Request, Body, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import { SignUpDto } from './dtos/sign-up.dto';
@@ -8,8 +8,15 @@ import { RefreshTokenDto } from './dtos/refresh-token.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('sign-in/google')
+  @UseGuards(AuthGuard('google'))
+  @Get('sign-in/google')
   signInWithGoogle() {}
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  signInWithGoogleCallback(@Request() req) {
+    return req.user; 
+  }
 
   @UseGuards(AuthGuard('local'))
   @Post('sign-in')
