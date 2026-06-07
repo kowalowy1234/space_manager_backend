@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { SignUpDto } from './dtos/sign-up.dto';
 import { User } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
+import { Profile } from 'passport-google-oauth20';
 
 @Injectable()
 export class AuthService {
@@ -112,6 +113,55 @@ export class AuthService {
 
       throw new InternalServerErrorException(
         'An error occured while registering a new user',
+      );
+    }
+  }
+
+  async validateOauthLogin(profile: Profile) {
+    try {
+      const { id, emails, photos, name } = profile;
+      const email = emails[0];
+      
+      let user: User | null = null;
+
+      user = await this.prisma.user.findUnique({
+        where: { googleId: id },
+      });
+
+      if (!user) {
+        user = await this.prisma.user.findUnique({
+          where: { email: email.value },
+        });
+
+        if (!user) {
+          user = await this.prisma.user.create({
+            data: {
+              email: email.value,
+              name: name.givenName || "-",
+              surname: name.familyName || "-",
+              googleId: id,
+            },
+          });
+        }
+      }
+
+      if (user.googleId !== id) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { googleId: id }
+        });
+      }
+
+      return this.signIn(user);
+    } catch(error) {
+      this.logger.error(error);
+
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'An error occured while validating Oauth user',
       );
     }
   }
